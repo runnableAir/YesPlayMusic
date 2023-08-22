@@ -41,7 +41,9 @@ export default {
   },
   data() {
     return {
-      tracks: [],
+      tracks: new Map(),
+      playNextTracks: [],
+      filteredTracks: [],
     };
   },
   computed: {
@@ -52,36 +54,35 @@ export default {
     playerShuffle() {
       return this.player.shuffle;
     },
-    filteredTracks() {
-      let trackIDs = this.player.list.slice(
-        this.player.current + 1,
-        this.player.current + 100
-      );
-      return this.tracks.filter(t => trackIDs.includes(t.id));
-    },
     playNextList() {
       return this.player.playNextList;
-    },
-    playNextTracks() {
-      return this.playNextList.map(tid => {
-        return this.tracks.find(t => t.id === tid);
-      });
     },
   },
   watch: {
     currentTrack() {
-      this.loadTracks();
+      this.loadTracks().then(() => {
+        this.loadFilteredTracks();
+      });
     },
     playerShuffle() {
-      this.loadTracks();
+      this.loadTracks().then(() => {
+        this.loadFilteredTracks();
+      });
     },
     playNextList() {
-      this.loadTracks();
+      this.loadTracks().then(() => {
+        this.loadPlayNextTracks();
+      });
     },
   },
   activated() {
-    this.loadTracks();
     this.$parent.$refs.scrollbar.restorePosition();
+  },
+  created() {
+    this.loadTracks().then(() => {
+      this.loadPlayNextTracks();
+      this.loadFilteredTracks();
+    });
   },
   methods: {
     ...mapActions(['playTrackOnListByID']),
@@ -95,17 +96,37 @@ export default {
       // 将playNextList的歌曲加进trackIDs
       trackIDs.push(...this.playNextList);
 
-      // 获取已经加载了的歌曲
-      let loadedTrackIDs = this.tracks.map(t => t.id);
-
-      if (trackIDs.length > 0) {
-        getTrackDetail(trackIDs.join(',')).then(data => {
-          let newTracks = data.songs.filter(
-            t => !loadedTrackIDs.includes(t.id)
-          );
-          this.tracks.push(...newTracks);
-        });
+      // 获取未加载的歌曲
+      const unloadedTrackIDs = [];
+      const loaded = this.tracks;
+      for (let id of trackIDs) {
+        if (!loaded.has(id)) {
+          unloadedTrackIDs.push(id);
+        }
       }
+
+      if (!unloadedTrackIDs.length) {
+        return Promise.resolve();
+      }
+      return getTrackDetail(unloadedTrackIDs.join(',')).then(data => {
+        const newTracks = data.songs;
+        for (let track of newTracks) {
+          loaded.set(track.id, track);
+        }
+      });
+    },
+    findTrackByIds(ids) {
+      return ids.map(id => this.tracks.get(id) || {});
+    },
+    loadFilteredTracks() {
+      let trackIDs = this.player.list.slice(
+        this.player.current + 1,
+        this.player.current + 100
+      );
+      this.filteredTracks = this.findTrackByIds(trackIDs);
+    },
+    loadPlayNextTracks() {
+      this.playNextTracks = this.findTrackByIds(this.playNextList);
     },
   },
 };
