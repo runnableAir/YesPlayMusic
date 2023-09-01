@@ -34,6 +34,9 @@ import { mapState, mapActions } from 'vuex';
 import { getTrackDetail } from '@/api/track';
 import TrackList from '@/components/TrackList.vue';
 
+// 播放列表展示歌曲数量 (包括当前播放歌曲, 但不包括插队歌曲)
+export const LIST_LEN = 100;
+
 export default {
   name: 'Next',
   components: {
@@ -42,6 +45,7 @@ export default {
   data() {
     return {
       tracks: [],
+      loadTracksUpdate: 0,
     };
   },
   computed: {
@@ -49,65 +53,102 @@ export default {
     currentTrack() {
       return this.player.currentTrack;
     },
+    current() {
+      return this.player.current;
+    },
     playerShuffle() {
       return this.player.shuffle;
     },
+    playlistSource() {
+      return this.player.playlistSource.id;
+    },
     filteredTracks() {
-      let trackIDs = this.player.list.slice(
-        this.player.current + 1,
-        this.player.current + 100
-      );
-      return trackIDs.map(tid => {
-        return this.tracks.find(t => t.id === tid);
-      });
+      // 展示列表后99首
+      const trackIDs = this.getNextNTrackIds(this.current + 1, LIST_LEN - 1);
+      return this.peekTracks(trackIDs);
     },
     playNextList() {
       return this.player.playNextList;
     },
     playNextTracks() {
-      return this.playNextList.map(tid => {
-        return this.tracks.find(t => t.id === tid);
-      });
+      return this.peekTracks(this.playNextList);
     },
   },
   watch: {
-    currentTrack() {
-      this.loadTracks();
+    current() {
+      this.loadTracksUpdate++;
     },
     playerShuffle() {
-      this.loadTracks();
+      this.loadTracksUpdate++;
     },
     playNextList() {
-      this.loadTracks();
+      this.loadPlayNextTracks();
+    },
+    playlistSource() {
+      // 列表源发生了改变，应清除原本缓存的歌曲
+      this.tracks = [];
+      this.loadTracksUpdate++;
+    },
+    loadTracksUpdate(count) {
+      if (count) {
+        this.loadTracks();
+        this.loadTracksUpdate = 0;
+      }
     },
   },
   activated() {
-    this.loadTracks();
     this.$parent.$refs.scrollbar.restorePosition();
+  },
+  created() {
+    this.loadTracks();
+    this.loadPlayNextTracks();
   },
   methods: {
     ...mapActions(['playTrackOnListByID']),
     loadTracks() {
-      // 获取播放列表当前歌曲后100首歌
-      let trackIDs = this.player.list.slice(
-        this.player.current + 1,
-        this.player.current + 100
-      );
-
-      // 将playNextList的歌曲加进trackIDs
-      trackIDs.push(...this.playNextList);
-
-      // 获取已经加载了的歌曲
-      let loadedTrackIDs = this.tracks.map(t => t.id);
-
-      if (trackIDs.length > 0) {
-        getTrackDetail(trackIDs.join(',')).then(data => {
-          let newTracks = data.songs.filter(
-            t => !loadedTrackIDs.includes(t.id)
-          );
-          this.tracks.push(...newTracks);
-        });
+      // 当前播放下标
+      const current = this.current;
+      // 预缓存长度
+      const cacheLen = 50;
+      // 查询150首(列表100首+预缓存50)
+      let queryIds = this.getNextNTrackIds(current, LIST_LEN + cacheLen);
+      // 检查从头开始均为已加载歌曲的列表前缀长度
+      // 如果当该长度小于当前列表长度, 则需要加载其他未加载的歌曲
+      const len = this.getLoadLength(queryIds);
+      if (len < LIST_LEN && len != queryIds.length) {
+        queryIds = queryIds.filter(id => !this.findTrack(id));
+        this.fetchTracks(queryIds);
       }
+    },
+    loadPlayNextTracks() {
+      let queryIds = this.playNextList;
+      queryIds = queryIds.filter(id => !this.findTrack(id));
+      this.fetchTracks(queryIds);
+    },
+    peekTracks(ids) {
+      const len = this.getLoadLength(ids);
+      ids = len < ids.length ? ids.slice(0, len) : ids;
+      return ids.map(this.findTrack);
+    },
+    getLoadLength(trackIds) {
+      // 返回从该id数组表示的歌曲列表中从头开始均为已加载的最大前缀长度
+      const cnt = trackIds.findIndex(id => !this.findTrack(id));
+      return cnt === -1 ? trackIds.length : cnt;
+    },
+    findTrack(id) {
+      return this.tracks.find(t => t.id === id);
+    },
+    getNextNTrackIds(offset, limit) {
+      return this.player.list.slice(offset, offset + limit);
+    },
+    fetchTracks(trackIDs) {
+      if (!trackIDs.length) {
+        return;
+      }
+      getTrackDetail(trackIDs.join(',')).then(data => {
+        const newTracks = data.songs.filter(x => !this.findTrack(x.id));
+        this.tracks.push(...newTracks);
+      });
     },
   },
 };
