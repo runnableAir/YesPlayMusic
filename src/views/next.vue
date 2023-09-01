@@ -57,17 +57,13 @@ export default {
         this.player.current + 1,
         this.player.current + 100
       );
-      return trackIDs.map(tid => {
-        return this.tracks.find(t => t.id === tid);
-      });
+      return this.findTracks(trackIDs);
     },
     playNextList() {
       return this.player.playNextList;
     },
     playNextTracks() {
-      return this.playNextList.map(tid => {
-        return this.tracks.find(t => t.id === tid);
-      });
+      return this.findTracks(this.playNextList);
     },
   },
   watch: {
@@ -99,6 +95,7 @@ export default {
 
       // 获取已经加载了的歌曲
       let loadedTrackIDs = this.tracks.map(t => t.id);
+      trackIDs = trackIDs.filter(id => !loadedTrackIDs.includes(id));
 
       if (trackIDs.length > 0) {
         getTrackDetail(trackIDs.join(',')).then(data => {
@@ -108,6 +105,10 @@ export default {
           this.tracks.push(...newTracks);
         });
       }
+    },
+    findTracks(ids) {
+      console.log('findTracks...');
+      return ids.map(id => this.tracks.find(t => t.id === id)).filter(x => x);
     },
   },
 };
