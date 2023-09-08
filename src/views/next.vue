@@ -51,82 +51,86 @@ export default {
     currentTrack() {
       return this.player.currentTrack;
     },
+    current() {
+      return this.player.current;
+    },
     playerShuffle() {
       return this.player.shuffle;
     },
     playNextList() {
       return this.player.playNextList;
     },
+    playlistSource() {
+      return this.player.playlistSource;
+    },
   },
   watch: {
-    currentTrack() {
-      this.loadTracks().then(() => {
-        this.loadFilteredTracks();
-      });
+    current(x) {
+      console.debug(`[debug][next.vue] watch current(=${x})...`);
+      this.loadFilteredTracks(x + 1);
     },
     playerShuffle() {
-      this.loadTracks().then(() => {
-        this.loadFilteredTracks();
-      });
+      console.debug(`[debug][next.vue] watch playerShuffle...`);
+      this.loadFilteredTracks(this.current + 1);
     },
-    playNextList() {
-      this.loadTracks().then(() => {
-        this.loadPlayNextTracks();
-      });
+    playlistSource() {
+      console.debug(`[debug][next.vue] watch playList...`);
+      this.tracks.clear();
+      this.loadFilteredTracks(this.current + 1);
     },
   },
   activated() {
     this.$parent.$refs.scrollbar.restorePosition();
   },
   created() {
-    this.loadTracks().then(() => {
-      this.loadPlayNextTracks();
-      this.loadFilteredTracks();
-    });
+    this.loadFilteredTracks(this.current + 1);
   },
   methods: {
     ...mapActions(['playTrackOnListByID']),
-    loadTracks() {
-      // 获取播放列表当前歌曲后100首歌
-      let trackIDs = this.player.list.slice(
-        this.player.current + 1,
-        this.player.current + 100
-      );
-
-      // 将playNextList的歌曲加进trackIDs
-      trackIDs.push(...this.playNextList);
-
-      // 获取未加载的歌曲
-      const unloadedTrackIDs = [];
-      const loaded = this.tracks;
-      for (let id of trackIDs) {
-        if (!loaded.has(id)) {
-          unloadedTrackIDs.push(id);
-        }
-      }
-
-      if (!unloadedTrackIDs.length) {
-        return Promise.resolve();
-      }
-      return getTrackDetail(unloadedTrackIDs.join(',')).then(data => {
+    fetchTracks(ids) {
+      const localTracks = this.tracks;
+      return getTrackDetail(ids.join(',')).then(data => {
         const newTracks = data.songs;
         for (let track of newTracks) {
-          loaded.set(track.id, track);
+          localTracks.set(track.id, track);
         }
+        console.debug('[debug][next.vue] fetchTracks: loading done');
       });
     },
+    getNextTrackIds(start, length) {
+      return this.player.list.slice(start, start + length);
+    },
     findTrackByIds(ids) {
-      return ids.map(id => this.tracks.get(id) || {});
+      return ids.map(id => this.tracks.get(id)).filter(e => e);
     },
-    loadFilteredTracks() {
-      let trackIDs = this.player.list.slice(
-        this.player.current + 1,
-        this.player.current + 100
-      );
-      this.filteredTracks = this.findTrackByIds(trackIDs);
+    loadFilteredTracks(start) {
+      const queryIds = this.getNextTrackIds(start, 100);
+      const callback = tracks => (this.filteredTracks = tracks);
+      this.fetchThenUpdate(queryIds, callback);
     },
-    loadPlayNextTracks() {
-      this.playNextTracks = this.findTrackByIds(this.playNextList);
+    fetchThenUpdate(queryIds, onResult) {
+      const localTracks = this.tracks;
+      const ifNoCache = id => !localTracks.has(id);
+      const update = ids => {
+        const tracks = this.findTrackByIds(ids);
+        onResult(tracks);
+      };
+      const firstUnloadIndex = queryIds.findIndex(ifNoCache);
+      console.debug('[debug][next.vue] first unload index:', firstUnloadIndex);
+      const isUpdateFirst = firstUnloadIndex >= 5;
+      if (isUpdateFirst) {
+        console.debug(
+          '[debug][next.vue] update list before fetching new tracks '
+        );
+        update(queryIds.slice(0, firstUnloadIndex));
+      }
+      if (firstUnloadIndex === -1) {
+        console.debug('[debug][next.vue] no tracks need fetch');
+        update(queryIds);
+        return;
+      }
+      const unloadIds = queryIds.filter(ifNoCache);
+      this.fetchTracks(unloadIds).then(() => update(queryIds));
     },
   },
 };
