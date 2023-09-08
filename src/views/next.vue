@@ -44,6 +44,7 @@ export default {
       tracks: new Map(),
       playNextTracks: [],
       filteredTracks: [],
+      filteredTracksChange: 0,
     };
   },
   computed: {
@@ -61,22 +62,34 @@ export default {
       return this.player.playNextList;
     },
     playlistSource() {
-      return this.player.playlistSource;
+      return this.player.playlistSource.id;
     },
   },
   watch: {
     current(x) {
       console.debug(`[debug][next.vue] watch current(=${x})...`);
-      this.loadFilteredTracks(x + 1);
+      this.filteredTracksChange++;
     },
     playerShuffle() {
       console.debug(`[debug][next.vue] watch playerShuffle...`);
-      this.loadFilteredTracks(this.current + 1);
+      this.filteredTracksChange++;
     },
     playlistSource() {
       console.debug(`[debug][next.vue] watch playList...`);
       this.tracks.clear();
-      this.loadFilteredTracks(this.current + 1);
+      this.filteredTracksChange++;
+    },
+    filteredTracksChange(count) {
+      if (count > 0) {
+        console.debug(
+          `[debug][next.vue] watch filteredTracksChange(=${count})...`
+        );
+        this.loadFilteredTracks(this.current + 1);
+      }
+    },
+    playNextList() {
+      console.debug('[debug][next.vue] watch playNextList...');
+      this.loadPlayNextTracks();
     },
   },
   activated() {
@@ -84,51 +97,57 @@ export default {
   },
   created() {
     this.loadFilteredTracks(this.current + 1);
+    this.loadPlayNextTracks();
   },
   methods: {
     ...mapActions(['playTrackOnListByID']),
     fetchTracks(ids) {
+      console.debug('[debug][next.vue] fetching Tracks');
       const localTracks = this.tracks;
       return getTrackDetail(ids.join(',')).then(data => {
         const newTracks = data.songs;
         for (let track of newTracks) {
           localTracks.set(track.id, track);
         }
-        console.debug('[debug][next.vue] fetchTracks: loading done');
       });
     },
     getNextTrackIds(start, length) {
       return this.player.list.slice(start, start + length);
     },
-    findTrackByIds(ids) {
-      return ids.map(id => this.tracks.get(id)).filter(e => e);
-    },
     loadFilteredTracks(start) {
+      console.debug(
+        `[debug][next.vue] invoke loadFilterdTracks(start=${start})`
+      );
       const queryIds = this.getNextTrackIds(start, 100);
-      const callback = tracks => (this.filteredTracks = tracks);
-      this.fetchThenUpdate(queryIds, callback);
+      this.fetchThenUpdate(queryIds, tracks => {
+        this.filteredTracks = tracks;
+        this.filteredTracksChange = 0;
+      });
     },
-    fetchThenUpdate(queryIds, onResult) {
+    loadPlayNextTracks() {
+      console.debug(`[debug][next.vue] invoke loadPlayNextTracks`);
+      const queryIds = this.playNextList;
+      this.fetchThenUpdate(queryIds, tracks => (this.playNextTracks = tracks));
+    },
+    fetchThenUpdate(queryIds, handle) {
       const localTracks = this.tracks;
       const ifNoCache = id => !localTracks.has(id);
       const update = ids => {
-        const tracks = this.findTrackByIds(ids);
-        onResult(tracks);
+        const tracks = ids.map(id => this.tracks.get(id));
+        handle(tracks);
       };
       const firstUnloadIndex = queryIds.findIndex(ifNoCache);
-      console.debug('[debug][next.vue] first unload index:', firstUnloadIndex);
+      // 如果前面至少有 5 首歌曲在缓存中，则先更新渲染一次
       const isUpdateFirst = firstUnloadIndex >= 5;
       if (isUpdateFirst) {
-        console.debug(
-          '[debug][next.vue] update list before fetching new tracks '
-        );
         update(queryIds.slice(0, firstUnloadIndex));
       }
+      // 如果所有歌曲都在缓存中，则可以直接完成更新，无需加载
       if (firstUnloadIndex === -1) {
-        console.debug('[debug][next.vue] no tracks need fetch');
         update(queryIds);
         return;
       }
+      // 加载歌曲再更新列表
       const unloadIds = queryIds.filter(ifNoCache);
       this.fetchTracks(unloadIds).then(() => update(queryIds));
     },
