@@ -66,29 +66,22 @@ export default {
     },
   },
   watch: {
-    current(x) {
-      console.debug(`[debug][next.vue] watch current(=${x})...`);
+    current() {
       this.filteredTracksChange++;
     },
     playerShuffle() {
-      console.debug(`[debug][next.vue] watch playerShuffle...`);
       this.filteredTracksChange++;
     },
     playlistSource() {
-      console.debug(`[debug][next.vue] watch playList...`);
       this.tracks.clear();
       this.filteredTracksChange++;
     },
     filteredTracksChange(count) {
       if (count > 0) {
-        console.debug(
-          `[debug][next.vue] watch filteredTracksChange(=${count})...`
-        );
         this.loadFilteredTracks(this.current + 1);
       }
     },
     playNextList() {
-      console.debug('[debug][next.vue] watch playNextList...');
       this.loadPlayNextTracks();
     },
   },
@@ -102,7 +95,6 @@ export default {
   methods: {
     ...mapActions(['playTrackOnListByID']),
     fetchTracks(ids) {
-      console.debug('[debug][next.vue] fetching Tracks');
       const localTracks = this.tracks;
       return getTrackDetail(ids.join(',')).then(data => {
         const newTracks = data.songs;
@@ -115,9 +107,6 @@ export default {
       return this.player.list.slice(start, start + length);
     },
     loadFilteredTracks(start) {
-      console.debug(
-        `[debug][next.vue] invoke loadFilterdTracks(start=${start})`
-      );
       const queryIds = this.getNextTrackIds(start, 100);
       this.fetchThenUpdate(queryIds, tracks => {
         this.filteredTracks = tracks;
@@ -125,7 +114,6 @@ export default {
       });
     },
     loadPlayNextTracks() {
-      console.debug(`[debug][next.vue] invoke loadPlayNextTracks`);
       const queryIds = this.playNextList;
       this.fetchThenUpdate(queryIds, tracks => (this.playNextTracks = tracks));
     },
