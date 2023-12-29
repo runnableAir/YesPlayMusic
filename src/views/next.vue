@@ -118,20 +118,18 @@ export default {
       this.fetchThenUpdate(queryIds, tracks => (this.playNextTracks = tracks));
     },
     fetchThenUpdate(queryIds, handle) {
-      const localTracks = this.tracks;
-      const ifNoCache = id => !localTracks.has(id);
+      const ifNoCache = id => !this.tracks.has(id);
       const update = ids => {
         const tracks = ids.map(id => this.tracks.get(id));
         handle(tracks);
       };
-      const firstUnloadIndex = queryIds.findIndex(ifNoCache);
+      const prefix = queryIds.findIndex(ifNoCache);
       // 如果前面至少有 5 首歌曲在缓存中，则先更新渲染一次
-      const isUpdateFirst = firstUnloadIndex >= 5;
-      if (isUpdateFirst) {
-        update(queryIds.slice(0, firstUnloadIndex));
+      if (prefix >= 5) {
+        update(queryIds.slice(0, prefix));
       }
       // 如果所有歌曲都在缓存中，则可以直接完成更新，无需加载
-      if (firstUnloadIndex === -1) {
+      if (prefix === -1) {
         update(queryIds);
         return;
       }
