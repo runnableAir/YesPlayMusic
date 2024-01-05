@@ -980,6 +980,7 @@ export default class {
   }
   switchShuffle() {
     this.shuffle = !this.shuffle;
+    this.current = this.list.indexOf(this.currentTrackID);
     if (isCreateMpris) {
       ipcRenderer?.send('switchShuffle', this.shuffle);
     }
