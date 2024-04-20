@@ -6,13 +6,13 @@
       type="playlist"
       dbclick-track-func="none"
     />
-    <h1 v-show="playNextList.length > 0"
+    <h1 v-show="watingTrackIds.length > 0"
       >插队播放
       <button @click="player.clearPlayNextList()">清除队列</button>
     </h1>
     <TrackList
-      v-show="playNextList.length > 0"
-      :tracks="playNextTracks"
+      v-show="watingTrackIds.length > 0"
+      :tracks="waitingTracks"
       type="playlist"
       :highlight-playing-track="false"
       dbclick-track-func="playTrackOnListByID"
@@ -21,7 +21,7 @@
     />
     <h1>{{ $t('next.nextUp') }}</h1>
     <TrackList
-      :tracks="filteredTracks"
+      :tracks="mainTracks"
       type="playlist"
       :highlight-playing-track="false"
       dbclick-track-func="playTrackOnListByID"
@@ -44,8 +44,9 @@ export default {
   },
   data() {
     return {
-      tracks: [],
-      loadTracksUpdate: 0,
+      trackMap: new Map(), // key: track.id
+      mainTracks: [],
+      waitingTracks: [],
     };
   },
   computed: {
@@ -53,102 +54,66 @@ export default {
     currentTrack() {
       return this.player.currentTrack;
     },
-    current() {
-      return this.player.current;
+    mainTrackIds() {
+      const offset = this.player.current + 1;
+      return this.player.list.slice(offset, offset + 99);
     },
-    playerShuffle() {
-      return this.player.shuffle;
-    },
-    playlistSource() {
-      return this.player.playlistSource.id;
-    },
-    filteredTracks() {
-      // 展示列表后99首
-      const trackIDs = this.getNextNTrackIds(this.current + 1, LIST_LEN - 1);
-      return this.peekTracks(trackIDs);
-    },
-    playNextList() {
+    watingTrackIds() {
       return this.player.playNextList;
-    },
-    playNextTracks() {
-      return this.peekTracks(this.playNextList);
     },
   },
   watch: {
-    current() {
-      this.loadTracksUpdate++;
+    mainTrackIds: {
+      handler: 'asyncUpdateMainTrackList',
+      immediate: true,
     },
-    playerShuffle() {
-      this.loadTracksUpdate++;
-    },
-    playNextList() {
-      this.loadPlayNextTracks();
-    },
-    playlistSource() {
-      // 列表源发生了改变，应清除原本缓存的歌曲
-      this.tracks = [];
-      this.loadTracksUpdate++;
-    },
-    loadTracksUpdate(count) {
-      if (count) {
-        this.loadTracks();
-        this.loadTracksUpdate = 0;
-      }
+    watingTrackIds: {
+      async handler(ids) {
+        const tracks = await this.fetchTracks(ids);
+        this.waitingTracks = tracks;
+      },
+      immediate: true,
     },
   },
   activated() {
     this.$parent.$refs.scrollbar.restorePosition();
   },
-  created() {
-    this.loadTracks();
-    this.loadPlayNextTracks();
-  },
   methods: {
     ...mapActions(['playTrackOnListByID']),
-    loadTracks() {
-      // 当前播放下标
-      const current = this.current;
-      // 预缓存长度
-      const cacheLen = 50;
-      // 查询150首(列表100首+预缓存50)
-      let queryIds = this.getNextNTrackIds(current, LIST_LEN + cacheLen);
-      // 检查从头开始均为已加载歌曲的列表前缀长度
-      // 如果当该长度小于当前列表长度, 则需要加载其他未加载的歌曲
-      const len = this.getLoadLength(queryIds);
-      if (len < LIST_LEN && len != queryIds.length) {
-        queryIds = queryIds.filter(id => !this.findTrack(id));
-        this.fetchTracks(queryIds);
-      }
-    },
-    loadPlayNextTracks() {
-      let queryIds = this.playNextList;
-      queryIds = queryIds.filter(id => !this.findTrack(id));
-      this.fetchTracks(queryIds);
-    },
-    peekTracks(ids) {
-      const len = this.getLoadLength(ids);
-      ids = len < ids.length ? ids.slice(0, len) : ids;
-      return ids.map(this.findTrack);
-    },
-    getLoadLength(trackIds) {
-      // 返回从该id数组表示的歌曲列表中从头开始均为已加载的最大前缀长度
-      const cnt = trackIds.findIndex(id => !this.findTrack(id));
-      return cnt === -1 ? trackIds.length : cnt;
-    },
-    findTrack(id) {
-      return this.tracks.find(t => t.id === id);
-    },
-    getNextNTrackIds(offset, limit) {
-      return this.player.list.slice(offset, offset + limit);
-    },
-    fetchTracks(trackIDs) {
+    async fetchTracks(trackIDs) {
       if (!trackIDs.length) {
+        return [];
+      }
+      console.log('fetching tracks...');
+      const data = await getTrackDetail(trackIDs.join(','));
+      console.log('done');
+      return data.songs;
+    },
+    asyncUpdateMainTrackList(trackIDs) {
+      this.replaceTracks(trackIDs, newTracks => (this.mainTracks = newTracks));
+    },
+    async replaceTracks(newTrackIDs, replace) {
+      if (!newTrackIDs.length) {
         return;
       }
-      getTrackDetail(trackIDs.join(',')).then(data => {
-        const newTracks = data.songs.filter(x => !this.findTrack(x.id));
-        this.tracks.push(...newTracks);
-      });
+      const total = newTrackIDs.length;
+      // Calculate the index of last available track (that can be got from map)
+      const index = newTrackIDs.findIndex(id => !this.trackMap.has(id));
+      const end = index == -1 ? total : index;
+      let tracks = [];
+      if (end === total || end >= 5) {
+        // Update tracklist view immediately
+        const ids = end === total ? newTrackIDs : newTrackIDs.slice(0, end);
+        tracks = ids.map(id => this.trackMap.get(id));
+        replace(tracks);
+      }
+      // fetch remain tracks
+      if (end < total) {
+        const remains = await this.fetchTracks(newTrackIDs.slice(end));
+        tracks.push(...remains);
+        replace(tracks);
+        remains.forEach(track => this.trackMap.set(track.id, track));
+      }
     },
   },
 };
