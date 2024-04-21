@@ -6,12 +6,12 @@
       type="playlist"
       dbclick-track-func="none"
     />
-    <h1 v-show="watingTrackIds.length > 0"
+    <h1 v-show="waitingTracks.length > 0"
       >插队播放
       <button @click="player.clearPlayNextList()">清除队列</button>
     </h1>
     <TrackList
-      v-show="watingTrackIds.length > 0"
+      v-show="waitingTracks.length"
       :tracks="waitingTracks"
       type="playlist"
       :highlight-playing-track="false"
@@ -21,7 +21,7 @@
     />
     <h1>{{ $t('next.nextUp') }}</h1>
     <TrackList
-      :tracks="mainTracks"
+      :tracks="subPlaylist"
       type="playlist"
       :highlight-playing-track="false"
       dbclick-track-func="playTrackOnListByID"
@@ -44,8 +44,7 @@ export default {
   },
   data() {
     return {
-      trackMap: new Map(), // key: track.id
-      mainTracks: [],
+      playlist: [],
       waitingTracks: [],
     };
   },
@@ -54,24 +53,26 @@ export default {
     currentTrack() {
       return this.player.currentTrack;
     },
-    mainTrackIds() {
-      const offset = this.player.current + 1;
-      return this.player.list.slice(offset, offset + 99);
+    playlistSource() {
+      return this.player.playlistSource;
     },
-    watingTrackIds() {
-      return this.player.playNextList;
+    subPlaylist() {
+      const begin = this.player.current;
+      const end = Math.min(begin + 99, this.playlist.length);
+      console.log('subPlaylist', begin, end);
+      const tracks = [];
+      for (let i = begin + 1; i < end; i++) {
+        if (!this.playlist[i]) {
+          break;
+        }
+        tracks.push(this.playlist[i]);
+      }
+      return tracks;
     },
   },
   watch: {
-    mainTrackIds: {
-      handler: 'asyncUpdateMainTrackList',
-      immediate: true,
-    },
-    watingTrackIds: {
-      async handler(ids) {
-        const tracks = await this.fetchTracks(ids);
-        this.waitingTracks = tracks;
-      },
+    playlistSource: {
+      handler: 'reloadPlaylist',
       immediate: true,
     },
   },
@@ -80,39 +81,30 @@ export default {
   },
   methods: {
     ...mapActions(['playTrackOnListByID']),
-    async fetchTracks(trackIDs) {
-      if (!trackIDs.length) {
-        return [];
-      }
-      console.log('fetching tracks...');
-      const data = await getTrackDetail(trackIDs.join(','));
-      console.log('done');
-      return data.songs;
-    },
-    asyncUpdateMainTrackList(trackIDs) {
-      this.replaceTracks(trackIDs, newTracks => (this.mainTracks = newTracks));
-    },
-    async replaceTracks(newTrackIDs, replace) {
-      if (!newTrackIDs.length) {
+    reloadPlaylist() {
+      this.playlist = [];
+      const trackIds = this.player.list;
+      if (trackIds.length === 0) {
         return;
       }
-      const total = newTrackIDs.length;
-      // Calculate the index of last available track (that can be got from map)
-      const index = newTrackIDs.findIndex(id => !this.trackMap.has(id));
-      const end = index == -1 ? total : index;
-      let tracks = [];
-      if (end === total || end >= 5) {
-        // Update tracklist view immediately
-        const ids = end === total ? newTrackIDs : newTrackIDs.slice(0, end);
-        tracks = ids.map(id => this.trackMap.get(id));
-        replace(tracks);
-      }
-      // fetch remain tracks
-      if (end < total) {
-        const remains = await this.fetchTracks(newTrackIDs.slice(end));
-        tracks.push(...remains);
-        replace(tracks);
-        remains.forEach(track => this.trackMap.set(track.id, track));
+      const total = trackIds.length;
+      const splitSize = 100;
+      const allTracks = new Array(total);
+      let loadCnt = 0;
+      for (let i = 0; i < total; i += splitSize) {
+        const ids = trackIds.slice(i, i + splitSize);
+        console.log('fetching tracks begin:', i);
+        getTrackDetail(ids.join(',')).then(data => {
+          console.log('fetching done bgein:', i);
+          const tracks = data.songs;
+          for (let j = 0; j < tracks.length; j++) {
+            allTracks[j + i] = tracks[j];
+          }
+          loadCnt += tracks.length;
+          if (loadCnt === total) {
+            this.playlist.push(...allTracks);
+          }
+        });
       }
     },
   },
