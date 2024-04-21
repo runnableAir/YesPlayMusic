@@ -58,7 +58,7 @@ export default {
     },
     subPlaylist() {
       const begin = this.player.current;
-      const end = Math.min(begin + 99, this.playlist.length);
+      const end = Math.min(begin + 100, this.playlist.length);
       console.log('subPlaylist', begin, end);
       const tracks = [];
       for (let i = begin + 1; i < end; i++) {
@@ -87,25 +87,26 @@ export default {
       if (trackIds.length === 0) {
         return;
       }
+      // 分批异步请求整个列表的歌曲详情, 每次请求 100 个歌曲详情.
+      // 每个请求对应一个 Promise, 调用 Promise.all 创建 Promise
+      // 表示异步等待所有的请求完成, 最后组装成完整的列表.
       const total = trackIds.length;
       const splitSize = 100;
-      const allTracks = new Array(total);
-      let loadCnt = 0;
+      const allPromises = [];
       for (let i = 0; i < total; i += splitSize) {
         const ids = trackIds.slice(i, i + splitSize);
         console.log('fetching tracks begin:', i);
-        getTrackDetail(ids.join(',')).then(data => {
+        const promise = getTrackDetail(ids.join(',')).then(data => {
           console.log('fetching done bgein:', i);
-          const tracks = data.songs;
-          for (let j = 0; j < tracks.length; j++) {
-            allTracks[j + i] = tracks[j];
-          }
-          loadCnt += tracks.length;
-          if (loadCnt === total) {
-            this.playlist.push(...allTracks);
-          }
+          return data.songs;
         });
+        allPromises.push(promise);
       }
+
+      Promise.all(allPromises).then(subTracks => {
+        const tracks = subTracks.flat();
+        this.playlist.push(...tracks);
+      });
     },
   },
 };
