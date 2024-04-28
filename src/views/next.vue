@@ -21,7 +21,7 @@
     />
     <h1>{{ $t('next.nextUp') }}</h1>
     <TrackList
-      :tracks="subPlaylist"
+      :tracks="subPlaylist.tracks"
       type="playlist"
       :highlight-playing-track="false"
       dbclick-track-func="playTrackOnListByID"
@@ -45,6 +45,7 @@ export default {
   data() {
     return {
       playlist: [],
+      reloading: false,
       waitingTracks: [],
     };
   },
@@ -57,22 +58,34 @@ export default {
       return this.player.playlistSource;
     },
     subPlaylist() {
-      const begin = this.player.current;
-      const end = Math.min(begin + 100, this.playlist.length);
-      const tracks = [];
-      for (let i = begin + 1; i < end; i++) {
-        if (!this.playlist[i]) {
-          break;
-        }
-        tracks.push(this.playlist[i]);
+      const current = this.player.current;
+      const len = this.player.list.length;
+      const start = current + 1;
+      const end = Math.min(len, current + 100);
+      const tracks = this.playlist.slice(start, end);
+      const index = tracks.findIndex(e => !e);
+      if (index === -1) {
+        return {
+          tracks,
+          requiredLoad: false,
+        };
       }
-      return tracks;
+      return {
+        tracks: tracks.slice(0, index),
+        requiredLoad: true,
+      };
     },
   },
   watch: {
     playlistSource: {
       handler: 'reloadPlaylist',
       immediate: true,
+    },
+    'subPlaylist.requiredLoad': function (requiredLoad) {
+      console.log('requiredLoad =', requiredLoad);
+      if (!this.reloading && requiredLoad) {
+        this.loadPlaylist();
+      }
     },
   },
   activated() {
@@ -81,28 +94,25 @@ export default {
   methods: {
     ...mapActions(['playTrackOnListByID']),
     reloadPlaylist() {
-      this.playlist = [];
-      const trackIds = this.player.list;
-      if (trackIds.length === 0) {
-        return;
+      this.reloading = true;
+      this.playlist = new Array(this.player.list.length);
+      this.loadPlaylist().then(() => (this.reloading = false));
+    },
+    async loadPlaylist() {
+      const len = this.playlist.length;
+      const current = this.player.current;
+      const loadStart = Math.max(0, current - 50);
+      const loadEnd = Math.min(len, current + 150);
+      console.log('loadStart =', loadStart, 'loadEnd =', loadEnd);
+      const trackIds = this.player.list.slice(loadStart, loadEnd);
+      const tracks = await this.fetchTracks(trackIds);
+      this.playlist.splice(loadStart, tracks.length, ...tracks);
+    },
+    fetchTracks(trackIds) {
+      if (!trackIds.length) {
+        return [];
       }
-      // Request details of tracks in batches
-      const total = trackIds.length;
-      const splitSize = 100;
-      // Array to hold all promises for requests.
-      const allPromises = [];
-      for (let i = 0; i < total; i += splitSize) {
-        const ids = trackIds.slice(i, i + splitSize);
-        const promise = getTrackDetail(ids.join(',')).then(data => {
-          return data.songs;
-        });
-        allPromises.push(promise);
-      }
-      // wait for all request to complete and collect results
-      Promise.all(allPromises).then(subTracks => {
-        const tracks = subTracks.flat();
-        this.playlist.push(...tracks);
-      });
+      return getTrackDetail(trackIds.join(',')).then(data => data.songs);
     },
   },
 };
