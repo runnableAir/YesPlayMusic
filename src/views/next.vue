@@ -54,8 +54,8 @@ export default {
     currentTrack() {
       return this.player.currentTrack;
     },
-    playlistSource() {
-      return this.player.playlistSource;
+    playlistId() {
+      return this.player.playlistSource.id;
     },
     subPlaylist() {
       const current = this.player.current;
@@ -77,7 +77,7 @@ export default {
     },
   },
   watch: {
-    playlistSource: {
+    playlistId: {
       handler: 'reloadPlaylist',
       immediate: true,
     },
