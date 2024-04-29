@@ -104,8 +104,17 @@ export default {
       const loadStart = Math.max(0, current - 50);
       const loadEnd = Math.min(len, current + 150);
       console.log('loadStart =', loadStart, 'loadEnd =', loadEnd);
-      const trackIds = this.player.list.slice(loadStart, loadEnd);
-      const tracks = await this.fetchTracks(trackIds);
+      // 获取在范围[loadStart,loadEnd)中需要加载的歌曲id
+      const trackIds = this.player.list
+        .slice(loadStart, loadEnd)
+        .filter((_, index) => !this.playlist[loadStart + index]);
+      console.log('slice & filtered ', trackIds.length);
+      const fetchedTracks = await this.fetchTracks(trackIds);
+      const tracks = [];
+      for (let i = loadStart, j = 0; i < loadEnd; i++) {
+        const track = !this.playlist[i] ? fetchedTracks[j++] : this.playlist[i];
+        tracks.push(track);
+      }
       this.playlist.splice(loadStart, tracks.length, ...tracks);
     },
     fetchTracks(trackIds) {
