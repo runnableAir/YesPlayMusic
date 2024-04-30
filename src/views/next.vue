@@ -35,7 +35,7 @@ import { getTrackDetail } from '@/api/track';
 import TrackList from '@/components/TrackList.vue';
 
 // 播放列表展示歌曲数量 (包括当前播放歌曲, 但不包括插队歌曲)
-export const LIST_LEN = 100;
+const LIST_LEN = 100;
 
 export default {
   name: 'Next',
@@ -58,10 +58,8 @@ export default {
       return this.player.playlistSource.id;
     },
     subPlaylist() {
-      const current = this.player.current;
-      const len = this.player.list.length;
-      const start = current + 1;
-      const end = Math.min(len, current + 100);
+      const start = this.displayRange.start;
+      const end = this.displayRange.end;
       const tracks = this.playlist.slice(start, end);
       const index = tracks.findIndex(e => !e);
       if (index === -1) {
@@ -73,6 +71,16 @@ export default {
       return {
         tracks: tracks.slice(0, index),
         requiredLoad: true,
+      };
+    },
+    displayRange() {
+      const current = this.player.current;
+      const len = this.player.list.length;
+      const start = current + 1;
+      const end = Math.min(len, current + LIST_LEN);
+      return {
+        start,
+        end,
       };
     },
   },
@@ -101,9 +109,12 @@ export default {
     },
     async loadPlaylist() {
       const len = this.playlist.length;
-      const current = this.player.current;
-      const loadStart = Math.max(0, current - 50);
-      const loadEnd = Math.min(len, current + 150);
+      // 根据当前列表展示区域计算要加载的歌曲的范围
+      const prelaod = 50; // 额外加载的数量
+      const start = this.displayRange.start;
+      const end = this.displayRange.end;
+      const loadStart = Math.max(0, start - prelaod);
+      const loadEnd = Math.min(len, end + prelaod);
       console.log('loadStart =', loadStart, 'loadEnd =', loadEnd);
       // 获取在范围[loadStart,loadEnd)中需要加载的歌曲id
       const trackIds = this.player.list
