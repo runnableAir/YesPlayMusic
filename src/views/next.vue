@@ -96,6 +96,7 @@ export default {
         this.loadPlaylist();
       }
     },
+    'player.playNextList': 'loadWaitingTracks',
   },
   activated() {
     this.$parent.$refs.scrollbar.restorePosition();
@@ -128,6 +129,33 @@ export default {
         tracks.push(track);
       }
       this.playlist.splice(loadStart, tracks.length, ...tracks);
+    },
+    loadWaitingTracks() {
+      const trackIds = this.player.playNextList;
+      const len = this.waitingTracks.length;
+      // 根据当前列表更新的特点进行加载
+      // 如果当前列表数量只是变动了 "1", 意味着队列新增或删除了一首歌曲
+      // 否则就完整的请求一次列表中的歌曲
+      if (Math.abs(trackIds.length - len) !== 1) {
+        this.fetchTracks(trackIds).then(
+          tracks => (this.waitingTracks = tracks)
+        );
+        return;
+      }
+      // 找到第一个id不同的歌曲的下标
+      // 如果找不到 (= -1), 说明是变动是新增歌曲, 否则说明该下标的歌曲被删除
+      const index = this.waitingTracks.findIndex(
+        (track, i) => track.id !== trackIds[i]
+      );
+      // 删除了歌曲
+      if (index !== -1) {
+        this.waitingTracks.splice(index, 1);
+        return;
+      }
+      // 新添加的歌曲
+      this.fetchTracks(trackIds.slice(index)).then(tracks =>
+        this.waitingTracks.push(tracks[0])
+      );
     },
     fetchTracks(trackIds) {
       if (!trackIds.length) {
