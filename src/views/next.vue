@@ -118,11 +118,11 @@ export default {
       const loadEnd = Math.min(len, end + prelaod);
       console.log('loadStart =', loadStart, 'loadEnd =', loadEnd);
       // 获取在范围[loadStart,loadEnd)中需要加载的歌曲id
-      const trackIds = this.player.list
+      const trackIDs = this.player.list
         .slice(loadStart, loadEnd)
         .filter((_, index) => !this.playlist[loadStart + index]);
-      console.log('slice & filtered ', trackIds.length);
-      const fetchedTracks = await this.fetchTracks(trackIds);
+      console.log('slice & filtered ', trackIDs.length);
+      const fetchedTracks = await this.fetchTracks(trackIDs);
       const tracks = [];
       for (let i = loadStart, j = 0; i < loadEnd; i++) {
         const track = !this.playlist[i] ? fetchedTracks[j++] : this.playlist[i];
@@ -131,13 +131,13 @@ export default {
       this.playlist.splice(loadStart, tracks.length, ...tracks);
     },
     loadWaitingTracks() {
-      const trackIds = this.player.playNextList;
+      const trackIDs = this.player.playNextList;
       const len = this.waitingTracks.length;
       // 根据当前列表更新的特点进行加载
       // 如果当前列表数量只是变动了 "1", 意味着队列新增或删除了一首歌曲
       // 否则就完整的请求一次列表中的歌曲
-      if (Math.abs(trackIds.length - len) !== 1) {
-        this.fetchTracks(trackIds).then(
+      if (Math.abs(trackIDs.length - len) !== 1) {
+        this.fetchTracks(trackIDs).then(
           tracks => (this.waitingTracks = tracks)
         );
         return;
@@ -145,7 +145,7 @@ export default {
       // 找到第一个id不同的歌曲的下标
       // 如果找不到 (= -1), 说明是变动是新增歌曲, 否则说明该下标的歌曲被删除
       const index = this.waitingTracks.findIndex(
-        (track, i) => track.id !== trackIds[i]
+        (track, i) => track.id !== trackIDs[i]
       );
       // 删除了歌曲
       if (index !== -1) {
@@ -153,15 +153,15 @@ export default {
         return;
       }
       // 新添加的歌曲
-      this.fetchTracks(trackIds.slice(index)).then(tracks =>
+      this.fetchTracks(trackIDs.slice(index)).then(tracks =>
         this.waitingTracks.push(tracks[0])
       );
     },
-    fetchTracks(trackIds) {
-      if (!trackIds.length) {
+    fetchTracks(trackIDs) {
+      if (!trackIDs.length) {
         return [];
       }
-      return getTrackDetail(trackIds.join(',')).then(data => data.songs);
+      return getTrackDetail(trackIDs.join(',')).then(data => data.songs);
     },
   },
 };
