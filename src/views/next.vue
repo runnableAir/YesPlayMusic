@@ -157,7 +157,7 @@ export default {
         this.waitingTracks.push(tracks[0])
       );
     },
-    fetchTracks(trackIDs) {
+    async fetchTracks(trackIDs) {
       if (!trackIDs.length) {
         return [];
       }
