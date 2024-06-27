@@ -89,7 +89,7 @@ export default {
       handler: 'reloadPlaylist',
       immediate: true,
     },
-    'player.shuffle': 'reloadPlaylist',
+    'player.list': 'reloadPlaylist',
     'subPlaylist.requiredLoad': function (requiredLoad) {
       console.log('requiredLoad =', requiredLoad);
       if (!this.reloading && requiredLoad) {
