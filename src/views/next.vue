@@ -95,26 +95,20 @@ export default {
       this.loadPlaylist().then(() => (this.reloading = false));
     },
     async loadPlaylist() {
-      const len = this.playlist.length;
       // 根据当前列表展示区域计算要加载的歌曲的范围
-      const prelaod = 50; // 额外加载的数量
-      const start = this.displayRange.start;
-      const end = this.displayRange.end;
-      const loadStart = Math.max(0, start - prelaod);
-      const loadEnd = Math.min(len, end + prelaod);
-      console.log('loadStart =', loadStart, 'loadEnd =', loadEnd);
-      // 获取在范围[loadStart,loadEnd)中需要加载的歌曲id
+      const { start, end } = this.getActualLoadRange();
+      console.log('loadStart =', start, 'loadEnd =', end);
       const trackIDs = this.player.list
-        .slice(loadStart, loadEnd)
-        .filter((_, index) => !this.playlist[loadStart + index]);
+        .slice(start, end)
+        .filter((_, index) => !this.playlist[start + index]);
       console.log('slice & filtered ', trackIDs.length);
       const fetchedTracks = await this.fetchTracks(trackIDs);
       const tracks = [];
-      for (let i = loadStart, j = 0; i < loadEnd; i++) {
+      for (let i = start, j = 0; i < end; i++) {
         const track = !this.playlist[i] ? fetchedTracks[j++] : this.playlist[i];
         tracks.push(track);
       }
-      this.playlist.splice(loadStart, tracks.length, ...tracks);
+      this.playlist.splice(start, tracks.length, ...tracks);
     },
     handleSubPlaylistLoad(requiredLoad) {
       console.log('requiredLoad =', requiredLoad);
@@ -154,6 +148,15 @@ export default {
         return [];
       }
       return getTrackDetail(trackIDs.join(',')).then(data => data.songs);
+    },
+    getActualLoadRange() {
+      const prelaod = 50; // 额外加载的数量
+      const { start, end } = this.displayRange;
+      const maxEnd = this.player.list.length;
+      return {
+        start: Math.max(0, start - prelaod),
+        end: Math.min(maxEnd, end + prelaod),
+      };
     },
   },
 };
