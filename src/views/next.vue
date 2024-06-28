@@ -59,15 +59,9 @@ export default {
       const end = this.displayRange.end;
       const tracks = this.playlist.slice(start, end);
       const index = tracks.findIndex(e => !e);
-      if (index === -1) {
-        return {
-          tracks,
-          requiredLoad: false,
-        };
-      }
       return {
-        tracks: tracks.slice(0, index),
-        requiredLoad: true,
+        tracks: index !== -1 ? tracks.slice(0, index) : tracks,
+        requiredLoad: index !== -1,
       };
     },
     displayRange() {
@@ -75,10 +69,7 @@ export default {
       const len = this.player.list.length;
       const start = current + 1;
       const end = Math.min(len, current + LIST_LEN);
-      return {
-        start,
-        end,
-      };
+      return { start, end };
     },
   },
   watch: {
