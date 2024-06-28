@@ -54,9 +54,6 @@ export default {
     currentTrack() {
       return this.player.currentTrack;
     },
-    playlistId() {
-      return this.player.playlistSource.id;
-    },
     subPlaylist() {
       const start = this.displayRange.start;
       const end = this.displayRange.end;
@@ -85,11 +82,10 @@ export default {
     },
   },
   watch: {
-    playlistId: {
+    'player.list': {
       handler: 'reloadPlaylist',
       immediate: true,
     },
-    'player.list': 'reloadPlaylist',
     'subPlaylist.requiredLoad': function (requiredLoad) {
       console.log('requiredLoad =', requiredLoad);
       if (!this.reloading && requiredLoad) {
