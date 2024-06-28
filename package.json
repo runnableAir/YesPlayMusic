@@ -79,7 +79,6 @@
     "x11": "^2.3.0"
   },
   "devDependencies": {
-    "@vue/runtime-dom": "latest",
     "@types/node": "^17.0.0",
     "@vue/cli-plugin-babel": "~4.5.0",
     "@vue/cli-plugin-eslint": "~4.5.0",
