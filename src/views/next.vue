@@ -77,13 +77,12 @@ export default {
       handler: 'reloadPlaylist',
       immediate: true,
     },
-    'subPlaylist.requiredLoad': function (requiredLoad) {
-      console.log('requiredLoad =', requiredLoad);
-      if (!this.reloading && requiredLoad) {
-        this.loadPlaylist();
-      }
+    'subPlaylist.requiredLoad': {
+      handler: 'handleSubPlaylistLoad',
     },
-    'player.playNextList': 'loadWaitingTracks',
+    'player.playNextList': {
+      handler: 'loadWaitingTracks',
+    },
   },
   activated() {
     this.$parent.$refs.scrollbar.restorePosition();
@@ -116,6 +115,12 @@ export default {
         tracks.push(track);
       }
       this.playlist.splice(loadStart, tracks.length, ...tracks);
+    },
+    handleSubPlaylistLoad(requiredLoad) {
+      console.log('requiredLoad =', requiredLoad);
+      if (!this.reloading && requiredLoad) {
+        this.loadPlaylist();
+      }
     },
     loadWaitingTracks() {
       const trackIDs = this.player.playNextList;
